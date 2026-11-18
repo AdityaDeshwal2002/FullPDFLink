@@ -283,7 +283,14 @@ def find_one(title: str, identifier: str, folder: Path, session: requests.Sessio
         try:
             candidates = search_fn()
         except (requests.RequestException, ValueError, RuntimeError) as exc:
-            errors.append(f'{name}: {exc}')
+            # Request errors can include URLs with API keys; only persist safe details.
+            if isinstance(exc, requests.HTTPError) and exc.response is not None:
+                detail = f'HTTP {exc.response.status_code}'
+            elif isinstance(exc, RuntimeError):
+                detail = str(exc)
+            else:
+                detail = type(exc).__name__
+            errors.append(f'{name}: {detail}')
             continue
         for candidate in candidates:
             if candidate['score'] >= 0.74:

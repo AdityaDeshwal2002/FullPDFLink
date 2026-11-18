@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import requests
+
 from paper_finder import _candidate, find_one, load_sheets, make_zip, title_score
 
 
@@ -50,6 +52,22 @@ class PaperFinderTests(unittest.TestCase):
             self.assertEqual(row['Result'], 'PDF downloaded')
             self.assertEqual(row['PDF link'], 'https://example.com/test.pdf')
             self.assertEqual(make_zip([row], out / 'all.zip'), 1)
+
+    def test_api_key_is_not_saved_in_error_notes(self):
+        response = requests.Response()
+        response.status_code = 401
+        response.url = 'https://example.com/?api_key=secret'
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                patch('paper_finder.search_openalex',
+                      side_effect=requests.HTTPError('https://example.com/?api_key=secret', response=response)),
+                patch('paper_finder.search_europe_pmc', return_value=[]),
+                patch('paper_finder.search_semantic_scholar', return_value=[]),
+                patch('paper_finder.search_crossref', return_value=[]),
+            ):
+                result = find_one('A paper', '1', Path(tmp), None, openalex_key='secret')
+            self.assertNotIn('secret', result['API notes'])
+            self.assertIn('HTTP 401', result['API notes'])
 
 
 if __name__ == '__main__':
